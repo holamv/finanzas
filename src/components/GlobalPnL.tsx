@@ -189,7 +189,7 @@ const GlobalPnL: React.FC<GlobalPnLProps> = ({ data, loading, months }) => {
                       <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
                       <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fontSize: 9, fontWeight: 900, fill: '#64748b'}} interval={2} />
                       <YAxis axisLine={false} tickLine={false} tick={{fontSize: 10, fill: '#64748b'}} tickFormatter={(v) => `$${v/1000000}M`} />
-                      <Tooltip contentStyle={{borderRadius: '24px', border: 'none', boxShadow: '0 20px 40px rgba(0,0,0,0.1)'}} formatter={(v: number) => [`$${v.toLocaleString()}`, 'Sales']} />
+                      <Tooltip contentStyle={{borderRadius: '24px', border: 'none', boxShadow: '0 20px 40px rgba(0,0,0,0.1)'}} formatter={(v: number | undefined) => v !== undefined ? [`$${v.toLocaleString()}`, 'Sales'] : ['$0', 'Sales']} />
                       <Area type="monotone" name="2025 Sales" dataKey={(d) => d.year === '2025' ? d.sales : null} stroke="#cbd5e1" fill="url(#colorSalesReal)" strokeWidth={2} />
                       <Area type="monotone" name="2026 Sales" dataKey={(d) => d.year === '2026' ? d.sales : null} stroke="#00843D" fill="url(#colorSalesForecast)" strokeWidth={4} />
                    </ComposedChart>
