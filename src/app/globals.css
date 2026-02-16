@@ -1,0 +1,35 @@
+@import "tailwindcss";
+
+:root {
+  /* MV Green Palette */
+  --mv-green-50: #E8F5EC;
+  --mv-green-100: #C5E6CE;
+  --mv-green-200: #9ED6AE;
+  --mv-green-300: #6BBF8A;
+  --mv-green-400: #3D9A5F;
+  --mv-green-500: #227A4B;
+  --mv-green-600: #1D6A41;
+  --mv-green-700: #185A37;
+  --mv-green-800: #134A2D;
+  --mv-green-900: #0E3A23;
+
+  /* MV Orange Palette */
+  --mv-orange-50: #FFF4E6;
+  --mv-orange-100: #FFE4C4;
+  --mv-orange-400: #F28B2D;
+  --mv-orange-500: #E85D04;
+  --mv-orange-600: #D4540A;
+
+  /* MV Yellow Palette */
+  --mv-yellow-50: #FFFBEB;
+  --mv-yellow-100: #FEF3C7;
+  --mv-yellow-400: #F0C94D;
+  --mv-yellow-500: #E5B83C;
+  --mv-yellow-600: #D4A72C;
+}
+
+body {
+  font-family: 'Nunito', system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
