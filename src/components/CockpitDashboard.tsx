@@ -13,10 +13,12 @@ import {
   Filter,
   DollarSign,
   Search,
-  ArrowRight
+  ArrowRight,
+  Activity,
+  ArrowUpRight
 } from 'lucide-react';
 import {
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, AreaChart, Area, Legend
 } from 'recharts';
 import { Country, ReconciliationResult } from '../types';
 import { getSalesData, getOCData, SalesRecord, OCRecord } from '@/services/cashFlowService';
@@ -29,6 +31,8 @@ interface CockpitProps {
 const CockpitDashboard: React.FC<CockpitProps> = ({ recon, country }) => {
   const [sales, setSales] = useState<SalesRecord[]>([]);
   const [ocs, setOcs] = useState<OCRecord[]>([]);
+  const [pnlMonthly, setPnlMonthly] = useState<any[]>([]);
+  const [pnlMonthsLabels, setPnlMonthsLabels] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
 
   // Filtros de fecha
@@ -43,12 +47,17 @@ const CockpitDashboard: React.FC<CockpitProps> = ({ recon, country }) => {
     const loadData = async () => {
       setLoading(true);
       try {
-        const [salesData, ocsData] = await Promise.all([
+        const [salesData, ocsData, pnlRes] = await Promise.all([
           getSalesData(),
-          getOCData()
+          getOCData(),
+          fetch(`/api/monthly-pnl?country=${country}&city=all&line=total`).then(res => res.json())
         ]);
         setSales(salesData);
         setOcs(ocsData);
+        if (pnlRes.pnl_data) {
+          setPnlMonthly(pnlRes.pnl_data);
+          setPnlMonthsLabels(pnlRes.months || []);
+        }
       } catch (error) {
         console.error("Error loading cockpit data:", error);
       } finally {
@@ -56,18 +65,10 @@ const CockpitDashboard: React.FC<CockpitProps> = ({ recon, country }) => {
       }
     };
     loadData();
-  }, []);
+  }, [country]);
 
-  const getCurrencySymbol = (c: Country) => {
-    switch (c) {
-      case 'Peru': return 'S/';
-      case 'Colombia': return 'COP';
-      case 'Mexico': return 'MXN';
-      default: return '$';
-    }
-  };
-
-  const symbol = getCurrencySymbol(country);
+  // Siempre mostrar $ sin conversión de tasas
+  const symbol = '$';
 
   // Filtrado por fecha y país
   const filteredSales = useMemo(() => {
@@ -109,33 +110,126 @@ const CockpitDashboard: React.FC<CockpitProps> = ({ recon, country }) => {
     return recon.filter(r => r.PAIS === targetCode || r.PAIS === country);
   }, [recon, country]);
 
-  const totalInflows = filteredSales.reduce((sum, s) => sum + s.monto, 0);
-  const totalOutflows = filteredOcs.reduce((sum, o) => sum + o.monto, 0);
+  // Calcular totales sin conversión de tasas (valores globales en $)
+  const totalInflows = useMemo(() => {
+    return filteredSales.reduce((sum, s) => sum + s.monto, 0);
+  }, [filteredSales]);
 
-  const cxc = filteredSales.reduce((sum, s) => sum + s.monto, 0);
-  const cxp = filteredOcs.reduce((sum, o) => sum + o.monto, 0);
+  const totalOutflows = useMemo(() => {
+    return filteredOcs.reduce((sum, o) => sum + o.monto, 0);
+  }, [filteredOcs]);
+
+  const cxc = totalInflows;
+  const cxp = totalOutflows;
 
   const cashReconciled = filteredRecon.filter(r => r.ESTADO === 'Si está').reduce((sum, r) => {
     const isOut = r.ORIGEN?.toLowerCase().includes('pago') || r.ID.toString().startsWith('OC');
-    return isOut ? sum - (r.MONTO || 0) : sum + (r.MONTO || 0);
+    const rawAmount = r.MONTO || 0;
+    return isOut ? sum - rawAmount : sum + rawAmount;
   }, 0);
 
   const reconRate = filteredRecon.length > 0
     ? (filteredRecon.filter(r => r.ESTADO === 'Si está').length / filteredRecon.length) * 100
     : 0;
 
-  // Datos para gráfico de categorías P&L (simulado con datos reales)
-  const pnlData = [
-    { name: 'Ventas Directas', value: totalInflows },
-    { name: 'Gastos Operativos', value: totalOutflows },
-    { name: 'Neto Periodo', value: totalInflows - totalOutflows },
-  ].sort((a, b) => b.value - a.value);
+  // Datos para gráfico de tendencias (agrupar por fecha, sin conversión)
+  const trendData = useMemo(() => {
+    const days: Record<string, { date: string, inflows: number, outflows: number }> = {};
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+
+    for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+      const ds = d.toISOString().split('T')[0];
+      days[ds] = { date: ds, inflows: 0, outflows: 0 };
+    }
+
+    filteredSales.forEach(s => {
+      if (days[s.fecha]) days[s.fecha].inflows += s.monto;
+    });
+
+    filteredOcs.forEach(o => {
+      if (days[o.fecha]) days[o.fecha].outflows += o.monto;
+    });
+
+    return Object.values(days).sort((a, b) => a.date.localeCompare(b.date));
+  }, [filteredSales, filteredOcs, startDate, endDate]);
+
+  // Formatear datos de P&L de la BD para gráficos
+  const formattedPnlData = useMemo(() => {
+    if (!pnlMonthly.length || !pnlMonthsLabels.length) return [];
+
+    return pnlMonthsLabels.map((month, idx) => {
+      const dataPoint: any = { month };
+      pnlMonthly.forEach(cat => {
+        dataPoint[cat.category] = cat.values[idx];
+      });
+      return dataPoint;
+    });
+  }, [pnlMonthly, pnlMonthsLabels]);
+
+  // Datos para gráfico de comparación EBITDA vs Contribution Margin
+  const pnlData = useMemo(() => {
+    // Si tenemos datos de la DB, usamos el último mes para este gráfico rápido
+    if (formattedPnlData.length > 0) {
+      const lastMonth = formattedPnlData[formattedPnlData.length - 2] || formattedPnlData[formattedPnlData.length - 1];
+      return [
+        { name: 'EBITDA', value: lastMonth['EBITDA'] || 0 },
+        { name: 'Contribution Margin', value: lastMonth['Contribution margin'] || 0 },
+      ];
+    }
+    return [
+      { name: 'EBITDA', value: 0 },
+      { name: 'Contribution Margin', value: 0 },
+    ];
+  }, [formattedPnlData]);
+
+  const radialData = [
+    { name: 'Conciliado', value: reconRate, fill: '#10b981' }
+  ];
+
+  // Calcular métricas P&L del último mes disponible
+  const lastMonthRevenue = useMemo(() => {
+    if (formattedPnlData.length === 0) return 0;
+    const lastMonth = formattedPnlData[formattedPnlData.length - 2] || formattedPnlData[formattedPnlData.length - 1];
+    return lastMonth['Revenue'] || 0;
+  }, [formattedPnlData]);
+
+  const lastMonthGrossMargin = useMemo(() => {
+    if (formattedPnlData.length === 0) return 0;
+    const lastMonth = formattedPnlData[formattedPnlData.length - 2] || formattedPnlData[formattedPnlData.length - 1];
+    return lastMonth['Gross Margin'] || 0;
+  }, [formattedPnlData]);
+
+  const lastMonthEBITDA = useMemo(() => {
+    if (formattedPnlData.length === 0) return 0;
+    const lastMonth = formattedPnlData[formattedPnlData.length - 2] || formattedPnlData[formattedPnlData.length - 1];
+    return lastMonth['EBITDA'] || 0;
+  }, [formattedPnlData]);
+
+  const lastMonthCOGS = useMemo(() => {
+    if (formattedPnlData.length === 0) return 0;
+    const lastMonth = formattedPnlData[formattedPnlData.length - 2] || formattedPnlData[formattedPnlData.length - 1];
+    return lastMonth['COGS'] || 0;
+  }, [formattedPnlData]);
+
+  const lastMonthSales = useMemo(() => {
+    if (formattedPnlData.length === 0) return 0;
+    const lastMonth = formattedPnlData[formattedPnlData.length - 2] || formattedPnlData[formattedPnlData.length - 1];
+    return lastMonth['Sales'] || 0;
+  }, [formattedPnlData]);
+
+  const lastMonthContributionMargin = useMemo(() => {
+    if (formattedPnlData.length === 0) return 0;
+    const lastMonth = formattedPnlData[formattedPnlData.length - 2] || formattedPnlData[formattedPnlData.length - 1];
+    return lastMonth['Contribution margin'] || 0;
+  }, [formattedPnlData]);
 
   const stats = [
-    { label: 'Caja Real (Conciliado)', value: cashReconciled, icon: <Wallet />, color: 'text-emerald-500', bg: 'bg-emerald-50' },
-    { label: 'Ingresos Maestros (Ventas)', value: totalInflows, icon: <TrendingUp />, color: 'text-blue-500', bg: 'bg-blue-50' },
-    { label: 'Egresos Maestros (OC)', value: totalOutflows, icon: <TrendingDown />, color: 'text-rose-500', bg: 'bg-rose-50' },
-    { label: 'Ingresos Totales', value: totalInflows, icon: <DollarSign />, color: 'text-slate-900', bg: 'bg-slate-100' },
+    { label: 'Sales', value: lastMonthSales, icon: <DollarSign />, color: 'text-purple-500', bg: 'bg-purple-50', trend: 'sales' },
+    { label: 'Revenue', value: lastMonthRevenue, icon: <Wallet />, color: 'text-indigo-500', bg: 'bg-indigo-50', trend: 'revenue' },
+    { label: 'Gross Margin', value: lastMonthGrossMargin, icon: <TrendingUp />, color: 'text-emerald-500', bg: 'bg-emerald-50', trend: 'grossMargin' },
+    { label: 'EBITDA', value: lastMonthEBITDA, icon: <Activity />, color: 'text-blue-500', bg: 'bg-blue-50', trend: 'ebitda' },
+    { label: 'COGS', value: lastMonthCOGS, icon: <TrendingDown />, color: 'text-rose-500', bg: 'bg-rose-50', trend: 'cogs' },
   ];
 
   if (loading) {
@@ -183,69 +277,146 @@ const CockpitDashboard: React.FC<CockpitProps> = ({ recon, country }) => {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      {/* P&L Metrics Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
         {stats.map((s, i) => (
-          <div key={i} className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm group hover:shadow-xl transition-all">
+          <div key={i} className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm group hover:shadow-xl transition-all relative overflow-hidden">
+            <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity">
+              {React.cloneElement(s.icon as any, { size: 80 })}
+            </div>
             <div className={`p-4 rounded-2xl ${s.bg} ${s.color} w-fit mb-6 group-hover:scale-110 transition-transform`}>{s.icon}</div>
             <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">{s.label}</p>
             <h3 className={`text-2xl font-black italic tracking-tighter ${s.color === 'text-slate-900' ? 'text-slate-900' : ''}`}>
-              {symbol} {Math.round(s.value).toLocaleString()}
+              ${s.value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </h3>
           </div>
         ))}
       </div>
 
+
+
+      {/* NUEVA SECCION: P&L Performance (desde monthly_db.json) */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-        {/* Cockpit P&L */}
-        <div className="lg:col-span-8 bg-white p-10 rounded-[3rem] border border-slate-100 shadow-sm h-full">
-          <div className="flex items-center justify-between mb-10">
-            <h4 className="text-[11px] font-black text-slate-900 uppercase tracking-widest flex items-center gap-3">
-              <PieIcon size={16} className="text-[#00B14F]" /> Cockpit P&L Categorizado
-            </h4>
-            <span className="text-[9px] font-black text-slate-400 bg-slate-50 px-4 py-2 rounded-full">Análisis de Período</span>
+        <div className="lg:col-span-12 bg-white p-10 rounded-[3.5rem] border border-slate-50 shadow-sm relative overflow-hidden">
+          {/* Background decoration */}
+          <div className="absolute -top-24 -right-24 w-96 h-96 bg-emerald-50 rounded-full blur-[100px] opacity-50"></div>
+
+          <div className="flex flex-col md:flex-row items-start md:items-center justify-between mb-10 gap-6 relative z-10">
+            <div>
+              <h4 className="text-[12px] font-black text-slate-900 uppercase tracking-[0.2em] flex items-center gap-3">
+                <TrendingUp size={18} className="text-emerald-500" /> Rendimiento P&L Histórico
+              </h4>
+              <p className="text-[9px] font-bold text-slate-400 mt-1 uppercase tracking-widest">Métricas oficiales desde Base de Datos Consolidada (Accrual)</p>
+            </div>
+
+            <div className="flex flex-wrap gap-4">
+              <div className="px-6 py-4 bg-slate-50 rounded-3xl border border-slate-100 min-w-[140px]">
+                <p className="text-[8px] font-black text-slate-400 uppercase mb-1">Gross Margin Avg</p>
+                <p className="text-xl font-black italic tracking-tighter text-slate-900">
+                  {(formattedPnlData.reduce((acc, curr) => acc + (curr['Gross Margin'] / (curr['Revenue'] || 1)), 0) / (formattedPnlData.length || 1) * 100).toFixed(1)}%
+                </p>
+              </div>
+              <div className="px-6 py-4 bg-slate-900 rounded-3xl min-w-[140px] text-white">
+                <p className="text-[8px] font-black opacity-50 uppercase mb-1">EBITDA Margin</p>
+                <p className="text-xl font-black italic tracking-tighter text-emerald-400">
+                  {(formattedPnlData.reduce((acc, curr) => acc + (curr['EBITDA'] / (curr['Revenue'] || 1)), 0) / (formattedPnlData.length || 1) * 100).toFixed(1)}%
+                </p>
+              </div>
+            </div>
           </div>
 
-          <div className="h-[300px]">
+          <div className="h-[350px] relative z-10">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={pnlData} layout="vertical">
-                <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f1f5f9" />
-                <XAxis type="number" hide />
-                <YAxis dataKey="name" type="category" axisLine={false} tickLine={false} tick={{ fontSize: 10, fontWeight: 900, fill: '#475569' }} />
+              <AreaChart data={formattedPnlData}>
+                <defs>
+                  <linearGradient id="colorSales" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#a855f7" stopOpacity={0.1} />
+                    <stop offset="95%" stopColor="#a855f7" stopOpacity={0} />
+                  </linearGradient>
+                  <linearGradient id="colorRev" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#6366f1" stopOpacity={0.1} />
+                    <stop offset="95%" stopColor="#6366f1" stopOpacity={0} />
+                  </linearGradient>
+                  <linearGradient id="colorEbitda" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#10b981" stopOpacity={0.1} />
+                    <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                <XAxis
+                  dataKey="month"
+                  axisLine={false}
+                  tickLine={false}
+                  tick={{ fontSize: 9, fontWeight: 900, fill: '#94a3b8' }}
+                />
+                <YAxis
+                  axisLine={false}
+                  tickLine={false}
+                  tick={{ fontSize: 10, fill: '#94a3b8' }}
+                  tickFormatter={(v) => `$${(v / 1000).toFixed(0)}K`}
+                />
+                <Tooltip
+                  contentStyle={{ borderRadius: '24px', border: 'none', boxShadow: '0 20px 40px rgba(0,0,0,0.1)' }}
+                  formatter={(v: any) => `$${Number(v).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+                />
+                <Area type="monotone" dataKey="Sales" stroke="#a855f7" strokeWidth={2} fillOpacity={1} fill="url(#colorSales)" />
+                <Area type="monotone" dataKey="Revenue" stroke="#6366f1" strokeWidth={3} fillOpacity={1} fill="url(#colorRev)" />
+                <Area type="monotone" dataKey="Gross Margin" stroke="#fbbf24" strokeWidth={2} fill="transparent" strokeDasharray="5 5" />
+                <Area type="monotone" dataKey="EBITDA" stroke="#10b981" strokeWidth={4} fillOpacity={1} fill="url(#colorEbitda)" />
+                <Legend iconType="circle" wrapperStyle={{ paddingTop: '20px', fontSize: '10px', fontWeight: 900, textTransform: 'uppercase' }} />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 gap-8">
+        {/* Cockpit P&L Detallado */}
+        <div className="bg-white p-10 rounded-[3rem] border border-slate-100 shadow-sm">
+          <div className="flex items-center justify-between mb-10">
+            <h4 className="text-[11px] font-black text-slate-900 uppercase tracking-widest flex items-center gap-3">
+              <PieIcon size={16} className="text-[#00B14F]" /> Rentabilidad Consolidada
+            </h4>
+            <div className="flex bg-slate-100 p-1 rounded-xl">
+              <button className="px-4 py-1.5 text-[8px] font-black uppercase bg-white rounded-lg shadow-sm">Real</button>
+              <button className="px-4 py-1.5 text-[8px] font-black uppercase text-slate-400">Proyectado</button>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-8 mb-10">
+            <div className="p-7 bg-slate-50 rounded-3xl border border-slate-100">
+              <p className="text-[9px] font-black text-slate-400 uppercase mb-2">Gross Margin %</p>
+              <div className="flex items-end gap-3">
+                <h5 className="text-3xl font-black italic tracking-tighter text-slate-900">
+                  {lastMonthRevenue > 0 ? ((lastMonthGrossMargin / lastMonthRevenue) * 100).toFixed(1) : '0.0'}%
+                </h5>
+                <div className="mb-1 flex items-center gap-1 text-emerald-500 font-bold text-[10px]">
+                  <TrendingUp size={12} />
+                </div>
+              </div>
+            </div>
+            <div className="p-7 bg-slate-900 rounded-3xl text-white shadow-xl shadow-slate-200">
+              <p className="text-[9px] font-black opacity-60 uppercase mb-2">Contribution Margin</p>
+              <h5 className="text-3xl font-black italic tracking-tighter text-emerald-400">
+                ${lastMonthContributionMargin.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </h5>
+            </div>
+          </div>
+
+          <div className="h-[250px]">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={pnlData}>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 10, fontWeight: 900, fill: '#64748b' }} />
+                <YAxis hide />
                 <Tooltip contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 10px 30px rgba(0,0,0,0.05)' }} cursor={{ fill: '#f8fafc' }} />
-                <Bar dataKey="value" fill="#00B14F" radius={[0, 10, 10, 0]} barSize={24}>
+                <Bar dataKey="value" radius={[10, 10, 0, 0]} barSize={60}>
                   {pnlData.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={index === 0 ? '#00B14F' : index === 1 ? '#10b981' : '#34d399'} />
+                    <Cell key={`cell-${index}`} fill={index === 0 ? '#10b981' : '#fbbf24'} />
                   ))}
                 </Bar>
               </BarChart>
             </ResponsiveContainer>
-          </div>
-        </div>
-
-        {/* Estado Conciliación y Alertas */}
-        <div className="lg:col-span-4 space-y-8 h-full">
-          <div className="bg-slate-900 p-10 rounded-[3rem] text-white h-[250px] flex flex-col justify-center relative overflow-hidden">
-            <div className="absolute top-0 right-0 p-8 opacity-10"><CheckCircle2 size={100} /></div>
-            <p className="text-[10px] font-black opacity-60 uppercase tracking-widest mb-2">Salud de Conciliación</p>
-            <h3 className="text-5xl font-black italic tracking-tighter text-emerald-400">{reconRate.toFixed(1)}%</h3>
-            <div className="w-full bg-white/10 h-2 rounded-full mt-6 overflow-hidden">
-              <div className="bg-emerald-400 h-full transition-all duration-1000" style={{ width: `${reconRate}%` }}></div>
-            </div>
-          </div>
-
-          <div className="bg-white p-10 rounded-[3rem] border border-slate-100 shadow-sm h-[300px] overflow-y-auto custom-scrollbar">
-            <h4 className="text-[10px] font-black text-slate-900 uppercase tracking-widest mb-6 flex items-center gap-2">
-              <AlertCircle size={14} className="text-amber-500" /> Movimientos Destacados
-            </h4>
-            <div className="space-y-4">
-              {filteredOcs.slice(0, 5).map((o, i) => (
-                <div key={i} className="flex items-center gap-4 group">
-                  <div className="h-2 w-2 rounded-full bg-rose-500 group-hover:scale-150 transition-transform"></div>
-                  <p className="text-[10px] font-bold text-slate-600 truncate flex-1 uppercase tracking-tight">{o.proveedor}</p>
-                  <span className="text-[9px] font-black text-rose-500">{symbol}{Math.round(o.monto).toLocaleString()}</span>
-                </div>
-              ))}
-            </div>
           </div>
         </div>
       </div>

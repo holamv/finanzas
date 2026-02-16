@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { Country } from '@/types';
 import { getSalesData, getOCData, SalesRecord, OCRecord } from '@/services/cashFlowService';
+import { convertToUSD, formatCurrency } from '@/lib/currencyUtils';
 
 interface CashFlowDataProps {
   selectedCountry: Country;
@@ -65,27 +66,20 @@ const CashFlowData: React.FC<CashFlowDataProps> = ({ selectedCountry }) => {
     });
   }, [salesData, ocData, activeTab, startDate, endDate, selectedCountry]);
 
+  // Calcular total considerando conversión a USD si es Global
   const totalAmount = useMemo(() => {
-    return filteredData.reduce((sum, record) => sum + record.monto, 0);
-  }, [filteredData]);
+    return filteredData.reduce((sum, record) => {
+      let amount = record.monto;
 
-  const formatCurrency = (value: number) => {
-    const config = {
-      Peru: { locale: 'es-PE', currency: 'PEN' },
-      Colombia: { locale: 'es-CO', currency: 'COP' },
-      Mexico: { locale: 'es-MX', currency: 'MXN' },
-      Global: { locale: 'en-US', currency: 'USD' }
-    };
+      if (selectedCountry === 'Global') {
+        // En modo Global, forzamos la conversión según el país del registro
+        // ya que los montos en Ventas/Gastos siempre vienen en moneda local
+        amount = convertToUSD(record.monto, record.pais || record.moneda || 'USD');
+      }
 
-    const { locale, currency } = config[selectedCountry] || config.Global;
-
-    return new Intl.NumberFormat(locale, {
-      style: 'currency',
-      currency: currency,
-      minimumFractionDigits: 0, // Generalmente quieren números redondos en estos dashboards
-      maximumFractionDigits: 0,
-    }).format(value);
-  };
+      return sum + amount;
+    }, 0);
+  }, [filteredData, selectedCountry]);
 
   const formatDate = (dateStr: string) => {
     try {
@@ -110,7 +104,7 @@ const CashFlowData: React.FC<CashFlowDataProps> = ({ selectedCountry }) => {
               PLANIFICACIÓN DE <span className="text-[#227A4B]">FLUJO</span>
             </h1>
             <p className="text-xs text-gray-500 uppercase mt-1">
-              {selectedCountry} • Gestión de Ingresos y Egresos
+              {selectedCountry === 'Global' ? 'GLOBAL (USD)' : selectedCountry} • Gestión de Ingresos y Egresos
             </p>
           </div>
 
@@ -182,7 +176,7 @@ const CashFlowData: React.FC<CashFlowDataProps> = ({ selectedCountry }) => {
             </p>
           </div>
           <p className="text-5xl font-black text-white">
-            {formatCurrency(totalAmount)}
+            {formatCurrency(totalAmount, selectedCountry)}
           </p>
         </div>
 
@@ -250,8 +244,16 @@ const CashFlowData: React.FC<CashFlowDataProps> = ({ selectedCountry }) => {
                   <div className="text-right">
                     <p className={`text-lg font-black ${activeTab === 'ventas' ? 'text-indigo-700' : 'text-orange-700'
                       }`}>
-                      {formatCurrency(record.monto)}
+                      {selectedCountry === 'Global'
+                        ? formatCurrency(convertToUSD(record.monto, record.pais || record.moneda || 'USD'), 'Global')
+                        : formatCurrency(record.monto, selectedCountry)
+                      }
                     </p>
+                    {selectedCountry === 'Global' && (
+                      <p className="text-[10px] text-gray-500 font-bold uppercase">
+                        {record.monto.toLocaleString()} {record.pais}
+                      </p>
+                    )}
                   </div>
                 </div>
               ))}

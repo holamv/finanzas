@@ -3,6 +3,7 @@ import React, { useState } from 'react';
 // Corrected import to use types.ts for Country
 import { ReconciliationResult, Country } from '../types';
 import { AlertCircle, CheckCircle2, HelpCircle, User, Mail, Zap, Calendar, Hash, IdCard, Check, Loader2 } from 'lucide-react';
+import { formatCurrency, convertToUSD, inferCurrencyFromCountryString } from '@/lib/currencyUtils';
 
 interface ReconciliationTableProps {
   data: ReconciliationResult[];
@@ -30,12 +31,12 @@ const ReconciliationTable: React.FC<ReconciliationTableProps> = ({ data, country
   const symbol = getCurrencySymbol(country);
 
   const getTxCode = (item: ReconciliationResult) => {
-    const code = item["CODIGO TRANSACCION"] || 
-                 item.CODIGO_TRANSACCION || 
-                 item.COD_TX ||
-                 item.TX_ID ||
-                 (item.CORRELATIVO && !item.SERIE ? String(item.CORRELATIVO) : null) ||
-                 ((item.SERIE && item.CORRELATIVO) ? `${item.SERIE}-${item.CORRELATIVO}` : String(item.ID || 'N/A'));
+    const code = item["CODIGO TRANSACCION"] ||
+      item.CODIGO_TRANSACCION ||
+      item.COD_TX ||
+      item.TX_ID ||
+      (item.CORRELATIVO && !item.SERIE ? String(item.CORRELATIVO) : null) ||
+      ((item.SERIE && item.CORRELATIVO) ? `${item.SERIE}-${item.CORRELATIVO}` : String(item.ID || 'N/A'));
     return String(code || '').trim();
   };
 
@@ -58,7 +59,7 @@ const ReconciliationTable: React.FC<ReconciliationTableProps> = ({ data, country
           <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Registros procesados para {country.toUpperCase()}</p>
         </div>
         <div className="px-5 py-2 bg-emerald-50 border border-emerald-100 rounded-full">
-           <span className="text-[11px] font-black text-emerald-600 uppercase tracking-tighter">{data.length} Filas Encontradas</span>
+          <span className="text-[11px] font-black text-emerald-600 uppercase tracking-tighter">{data.length} Filas Encontradas</span>
         </div>
       </div>
 
@@ -89,13 +90,12 @@ const ReconciliationTable: React.FC<ReconciliationTableProps> = ({ data, country
               return (
                 <tr key={idx} className="group bg-slate-50/50 hover:bg-white border border-slate-100 transition-all animate-in fade-in" style={{ animationDelay: `${idx * 15}ms` }}>
                   <td className="px-6 py-5 first:rounded-l-3xl">
-                    <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full w-fit border shadow-sm ${
-                      item.ESTADO === 'Si está' 
-                        ? 'bg-emerald-50 border-emerald-100 text-emerald-600' 
-                        : item.ESTADO === 'No está' 
+                    <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full w-fit border shadow-sm ${item.ESTADO === 'Si está'
+                        ? 'bg-emerald-50 border-emerald-100 text-emerald-600'
+                        : item.ESTADO === 'No está'
                           ? 'bg-rose-50 border-rose-100 text-rose-600'
                           : 'bg-amber-50 border-amber-100 text-amber-600'
-                    }`}>
+                      }`}>
                       {item.ESTADO === 'Si está' ? <CheckCircle2 className="w-3 h-3" /> : item.ESTADO === 'No está' ? <AlertCircle className="w-3 h-3" /> : <HelpCircle className="w-3 h-3" />}
                       <span className="text-[9px] font-black uppercase tracking-tight">{item.ESTADO || 'Difiere'}</span>
                     </div>
@@ -141,17 +141,25 @@ const ReconciliationTable: React.FC<ReconciliationTableProps> = ({ data, country
                   <td className="px-6 py-5 text-right">
                     <div className="flex flex-col items-end">
                       <span className={`text-xs font-black ${diffValue > 0 ? 'text-rose-500' : 'text-slate-400'}`}>
-                        {symbol} {diffValue.toLocaleString()}
+                        {country === 'Global'
+                          ? formatCurrency(convertToUSD(diffValue, inferCurrencyFromCountryString(item.PAIS || '')), 'Global')
+                          : `${symbol} ${diffValue.toLocaleString()}`
+                        }
                       </span>
                       {diffValue > 0 && <span className="text-[8px] font-black text-rose-300 uppercase tracking-tighter">Desajuste</span>}
                     </div>
                   </td>
                   <td className="px-6 py-5 text-right">
-                    <span className="text-xs font-black text-emerald-600">{symbol} {contable.toLocaleString()}</span>
+                    <span className="text-xs font-black text-emerald-600">
+                      {country === 'Global'
+                        ? formatCurrency(convertToUSD(contable, inferCurrencyFromCountryString(item.PAIS || '')), 'Global')
+                        : `${symbol} ${contable.toLocaleString()}`
+                      }
+                    </span>
                   </td>
                   <td className="px-6 py-5 text-center last:rounded-r-3xl">
                     {!isReconciled && onManualReconcile && (
-                      <button 
+                      <button
                         onClick={() => handleManualAction(item)}
                         disabled={processingId === String(internalId)}
                         className={`p-2.5 rounded-xl border border-emerald-200 bg-emerald-50 text-emerald-600 hover:bg-emerald-600 hover:text-white transition-all shadow-sm group/btn disabled:opacity-50`}

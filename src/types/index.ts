@@ -55,7 +55,9 @@ export type Country = 'Peru' | 'Colombia' | 'Mexico' | 'Global';
 export type AppTab =
   | 'cockpit'
   | 'pnl_global'
+  | 'pnl_monthly'
   | 'forecast_2026'
+  | 'real_vs_budget'
   | 'conciliation_active'
   | 'conciliation_history'
   | 'cash_entry'

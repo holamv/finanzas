@@ -1,5 +1,6 @@
 // URL del Google Apps Script para Weekly Financial Model
 const WEEKLY_FINANCIAL_URL = 'https://script.google.com/macros/s/AKfycbw6y96A27BZc8MXvHvmDLgMf2GWBI0cx3Ihh3EuLe0Ho67cALh329uqUf9gTxa4L2K2/exec';
+import { convertToUSD, inferCurrencyFromCountryString } from '@/lib/currencyUtils';
 
 export interface CityMetrics {
   Sales: number[];
@@ -103,16 +104,22 @@ export function getCountryMetrics(
     const metrics = data.citiesData[city as keyof typeof data.citiesData];
     if (!metrics) return;
 
+    const countryOfCity = cityToCountry(city);
+    const currencyOfCity = inferCurrencyFromCountryString(countryOfCity);
+
     metrics.Sales?.forEach((val, idx) => {
-      totalSales[idx] = (totalSales[idx] || 0) + (val || 0);
+      const amount = country === 'Global' ? convertToUSD(val || 0, currencyOfCity) : (val || 0);
+      totalSales[idx] = (totalSales[idx] || 0) + amount;
     });
 
     metrics.Catering?.forEach((val, idx) => {
-      totalCatering[idx] = (totalCatering[idx] || 0) + (val || 0);
+      const amount = country === 'Global' ? convertToUSD(val || 0, currencyOfCity) : (val || 0);
+      totalCatering[idx] = (totalCatering[idx] || 0) + amount;
     });
 
     metrics.Delivery?.forEach((val, idx) => {
-      totalDelivery[idx] = (totalDelivery[idx] || 0) + (val || 0);
+      const amount = country === 'Global' ? convertToUSD(val || 0, currencyOfCity) : (val || 0);
+      totalDelivery[idx] = (totalDelivery[idx] || 0) + amount;
     });
 
     if (metrics['Gross margin']) {

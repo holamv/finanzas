@@ -16,7 +16,8 @@ import {
   Settings,
   TrendingUp,
   BarChart3,
-  ClipboardList
+  ClipboardList,
+  Calendar
 } from 'lucide-react';
 import { AppTab } from '../types';
 
@@ -35,9 +36,9 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, isSidebarOpe
       items: [
         { id: 'cockpit', icon: Trophy, label: 'Cockpit P&L' },
         { id: 'pnl_global', icon: FileText, label: 'P&L Global' },
+        { id: 'pnl_monthly', icon: Calendar, label: 'Monthly P&L' },
         { id: 'forecast_2026', icon: TrendingUp, label: 'Forecast 2026' },
-        { id: 'cash_data', icon: Database, label: 'Datos Maestro' },
-        { id: 'order_manager', icon: ClipboardList, label: 'Administración OC' },
+        { id: 'real_vs_budget', icon: Scale, label: 'Real vs Presupuestado' },
       ]
     },
     {
@@ -50,6 +51,8 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, isSidebarOpe
     {
       title: 'CASH FLOW',
       items: [
+        { id: 'cash_data', icon: Database, label: 'Datos Maestro' },
+        { id: 'order_manager', icon: ClipboardList, label: 'Administración OC' },
         { id: 'cash_entry', icon: Settings, label: 'Supuestos' },
         { id: 'weekly_financial', icon: BarChart3, label: 'Modelo Semanal' },
         { id: 'cash_projection', icon: ChartLine, label: 'Proyección' },
@@ -83,8 +86,8 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, isSidebarOpe
                   key={item.id}
                   onClick={() => setActiveTab(item.id as AppTab)}
                   className={`w-full p-3 rounded-lg flex items-center justify-center transition-all ${activeTab === item.id
-                      ? 'bg-[#00B14F] text-white'
-                      : 'text-gray-400 hover:text-gray-600 hover:bg-gray-50'
+                    ? 'bg-[#00B14F] text-white'
+                    : 'text-gray-400 hover:text-gray-600 hover:bg-gray-50'
                     }`}
                   title={item.label}
                 >
@@ -134,8 +137,8 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, isSidebarOpe
                   key={item.id}
                   onClick={() => setActiveTab(item.id as AppTab)}
                   className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all group ${isActive
-                      ? 'bg-[#00B14F] text-white shadow-sm'
-                      : 'text-gray-600 hover:bg-gray-50'
+                    ? 'bg-[#00B14F] text-white shadow-sm'
+                    : 'text-gray-600 hover:bg-gray-50'
                     }`}
                 >
                   <Icon size={16} className={isActive ? 'text-white' : 'text-gray-400 group-hover:text-[#00B14F]'} />

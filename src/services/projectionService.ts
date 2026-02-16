@@ -18,6 +18,7 @@ import {
   OCRecord
 } from './cashFlowService';
 import { getProjectionFactors } from './geminiService';
+import { convertToUSD } from '@/lib/currencyUtils';
 import {
   getWeeklyFinancialData,
   getCountryMetrics,
@@ -46,9 +47,16 @@ export async function getHistoricalStats(
   const sales = filterSalesByCountryAndDateRange(salesData, country, startDate, endDate);
   const ocs = filterOCByCountryAndDateRange(ocData, country, startDate, endDate);
 
-  // Calcular totales
-  const totalInflows = sales.reduce((sum, s) => sum + s.monto, 0);
-  const totalOutflows = ocs.reduce((sum, o) => sum + o.monto, 0);
+  // Calcular totales con conversión armada si es Global
+  const totalInflows = sales.reduce((sum, s) => {
+    const amount = country === 'Global' ? convertToUSD(s.monto, s.moneda) : s.monto;
+    return sum + amount;
+  }, 0);
+
+  const totalOutflows = ocs.reduce((sum, o) => {
+    const amount = country === 'Global' ? convertToUSD(o.monto, o.moneda) : o.monto;
+    return sum + amount;
+  }, 0);
 
   // Calcular promedios diarios
   const avgDailyInflows = totalInflows / days;
@@ -68,7 +76,10 @@ export async function getHistoricalStats(
         const d = new Date(s.fecha);
         return d >= dayStart && d < dayEnd;
       })
-      .reduce((sum, s) => sum + s.monto, 0);
+      .reduce((sum, s) => {
+        const amount = country === 'Global' ? convertToUSD(s.monto, s.moneda) : s.monto;
+        return sum + amount;
+      }, 0);
 
     dailyInflows.push(dayTotal);
   }
@@ -398,8 +409,8 @@ export async function comparePlanVsReal(
     endDate: new Date(week.endDate)
   }));
 
-  // Agrupar datos reales por semana
-  const realByWeek = groupByWeek(realSales, realOCs, weekRanges);
+  // Agrupar datos reales por semana (pasando el país para conversión correcta)
+  const realByWeek = groupByWeek(realSales, realOCs, weekRanges, plan.country);
 
   // Actualizar proyecciones con datos reales
   const comparisonByWeek = plan.scenarios.base.map((projWeek, index) => {

@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { getOrdersMaster } from '@/services/googleSheetsService';
+import { convertToUSD, formatCurrency } from '@/lib/currencyUtils';
+import { Country } from '@/types';
 
 export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url);
@@ -41,15 +43,21 @@ export async function GET(req: NextRequest) {
         doc.text(`Generado vía API - ${new Date().toLocaleString()}`, 14, 28);
         doc.text(`Filtro Aplicado: ${filter}`, 14, 34);
 
-        const tableData = filtered.map(oc => [
-            oc.correlativo,
-            oc.proveedor,
-            oc.fechaVencimiento || '---',
-            oc.concepto,
-            `${oc.moneda} ${oc.monto.toLocaleString()}`,
-            oc.statusTesoreriaRaw || 'Pendiente',
-            'CRISTHIAN MAYO'
-        ]);
+        const tableData = filtered.map(oc => {
+            const displayAmount = country === 'Global'
+                ? formatCurrency(convertToUSD(oc.monto, oc.moneda), 'Global')
+                : formatCurrency(oc.monto, country as Country);
+
+            return [
+                oc.correlativo,
+                oc.proveedor,
+                oc.fechaVencimiento || '---',
+                oc.concepto,
+                displayAmount,
+                oc.statusTesoreriaRaw || 'Pendiente',
+                'CRISTHIAN MAYO'
+            ];
+        });
 
         autoTable(doc, {
             startY: 40,

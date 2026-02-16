@@ -2,28 +2,29 @@
 import React, { useMemo } from 'react';
 // Corrected import to use types.ts for Country
 import { ReconciliationResult, Country } from '../types';
-import { 
-  TrendingUp, 
-  AlertTriangle, 
-  DollarSign, 
-  PieChart as PieIcon, 
+import {
+  TrendingUp,
+  AlertTriangle,
+  DollarSign,
+  PieChart as PieIcon,
   Briefcase,
   Layers,
   ArrowRight
 } from 'lucide-react';
-import { 
-  PieChart, 
-  Pie, 
-  Cell, 
-  ResponsiveContainer, 
-  BarChart, 
-  Bar, 
-  XAxis, 
-  YAxis, 
-  Tooltip, 
+import {
+  PieChart,
+  Pie,
+  Cell,
+  ResponsiveContainer,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  Tooltip,
   Legend,
   CartesianGrid
 } from 'recharts';
+import { formatCurrency, convertToUSD, getCurrencyByCountry, inferCurrencyFromCountryString } from '@/lib/currencyUtils';
 
 interface DashboardProps {
   data: ReconciliationResult[];
@@ -37,63 +38,73 @@ const STATUS_COLORS = {
 };
 
 const Dashboard: React.FC<DashboardProps> = ({ data, country }) => {
-  const getCurrencyInfo = (c: Country) => {
-    const countryStr = String(c).toLowerCase();
-    switch (countryStr) {
-      case 'perú':
-      case 'peru': return { symbol: 'S/', code: 'PEN' };
-      case 'colombia': return { symbol: '$', code: 'COP' };
-      case 'méxico':
-      case 'mexico': return { symbol: '$', code: 'MXN' };
-      default: return { symbol: 'S/', code: 'PEN' };
-    }
-  };
-
-  const currency = getCurrencyInfo(country);
-
   const stats = useMemo(() => {
     const totalRecords = data.length;
-    const totalAmount = data.reduce((sum, item) => sum + (Number(item["MONTO CONTABLE"]) || 0), 0);
-    const successCount = data.filter(item => item.ESTADO === 'Si está').length;
-    const errorCount = data.filter(item => item.ESTADO === 'No está').length;
-    const diffCount = data.filter(item => item.ESTADO !== 'Si está' && item.ESTADO !== 'No está').length;
-    
-    const amountInRisk = data
-      .filter(item => item.ESTADO !== 'Si está')
-      .reduce((sum, item) => sum + (Number(item["MONTO CONTABLE"]) || 0), 0);
+
+    // Suma total considerando conversión si es Global
+    const totals = data.reduce((acc, item) => {
+      const monto = Number(item["MONTO CONTABLE"]) || 0;
+      const isOk = item.ESTADO === 'Si está';
+      const isNotOk = item.ESTADO === 'No está';
+      const isDiff = !isOk && !isNotOk;
+
+      // Inferimos moneda si no viene e intentamos ser robustos
+      let montoInContext = monto;
+      if (country === 'Global') {
+        const pais = (item.PAIS || '').toUpperCase();
+        // Usamos la función de inferencia para mayor robustez
+        const curr = inferCurrencyFromCountryString(pais);
+        montoInContext = convertToUSD(monto, curr);
+      }
+
+      acc.total += montoInContext;
+      if (!isOk) acc.risk += montoInContext;
+      if (isOk) acc.successCount++;
+      else if (isNotOk) acc.errorCount++;
+      else acc.diffCount++;
+
+      return acc;
+    }, { total: 0, risk: 0, successCount: 0, errorCount: 0, diffCount: 0 });
 
     const statusData = [
-      { name: 'Si está', value: successCount },
-      { name: 'No está', value: errorCount },
-      { name: 'Difiere', value: diffCount },
+      { name: 'Si está', value: totals.successCount },
+      { name: 'No está', value: totals.errorCount },
+      { name: 'Difiere', value: totals.diffCount },
     ].filter(d => d.value > 0);
 
     const financialOriginMap: Record<string, any> = {};
-    
+
     data.forEach(item => {
       const o = item.ORIGEN || 'DESCONOCIDO';
       const monto = Number(item["MONTO CONTABLE"]) || 0;
-      
+
+      let montoInContext = monto;
+      if (country === 'Global') {
+        const pais = (item.PAIS || '').toUpperCase();
+        const curr = inferCurrencyFromCountryString(pais);
+        montoInContext = convertToUSD(monto, curr);
+      }
+
       if (!financialOriginMap[o]) {
-        financialOriginMap[o] = { 
-          name: o, 
+        financialOriginMap[o] = {
+          name: o,
           'Si está': 0, 'No está': 0, 'Difiere': 0,
           'Si está_count': 0, 'No está_count': 0, 'Difiere_count': 0,
-          total: 0, count: 0 
+          total: 0, count: 0
         };
       }
-      
-      financialOriginMap[o].total += monto;
+
+      financialOriginMap[o].total += montoInContext;
       financialOriginMap[o].count += 1;
 
       if (item.ESTADO === 'Si está') {
-        financialOriginMap[o]['Si está'] += monto;
+        financialOriginMap[o]['Si está'] += montoInContext;
         financialOriginMap[o]['Si está_count'] += 1;
       } else if (item.ESTADO === 'No está') {
-        financialOriginMap[o]['No está'] += monto;
+        financialOriginMap[o]['No está'] += montoInContext;
         financialOriginMap[o]['No está_count'] += 1;
       } else {
-        financialOriginMap[o]['Difiere'] += monto;
+        financialOriginMap[o]['Difiere'] += montoInContext;
         financialOriginMap[o]['Difiere_count'] += 1;
       }
     });
@@ -102,16 +113,16 @@ const Dashboard: React.FC<DashboardProps> = ({ data, country }) => {
 
     return {
       totalRecords,
-      totalAmount,
-      amountInRisk,
-      successCount,
-      errorCount,
-      diffCount,
-      successRate: totalRecords > 0 ? (successCount / totalRecords) * 100 : 0,
+      totalAmount: totals.total,
+      amountInRisk: totals.risk,
+      successCount: totals.successCount,
+      errorCount: totals.errorCount,
+      diffCount: totals.diffCount,
+      successRate: totalRecords > 0 ? (totals.successCount / totalRecords) * 100 : 0,
       statusData,
       financialByOriginData,
     };
-  }, [data]);
+  }, [data, country]);
 
   // Tooltip personalizado para mostrar conteo y dinero
   const CustomTooltip = ({ active, payload, label }: any) => {
@@ -125,7 +136,7 @@ const Dashboard: React.FC<DashboardProps> = ({ data, country }) => {
               const status = entry.name;
               const count = data[`${status}_count`] || 0;
               const amount = entry.value || 0;
-              
+
               if (count === 0 && amount === 0) return null;
 
               return (
@@ -136,7 +147,7 @@ const Dashboard: React.FC<DashboardProps> = ({ data, country }) => {
                     <span className="text-[10px] font-black text-slate-900">{count} Transacciones</span>
                   </div>
                   <p className="text-[9px] text-slate-400 font-bold ml-4">
-                    ({currency.symbol}{amount.toLocaleString()} {currency.code})
+                    ({formatCurrency(amount, country)})
                   </p>
                 </div>
               );
@@ -150,7 +161,7 @@ const Dashboard: React.FC<DashboardProps> = ({ data, country }) => {
 
   return (
     <div className="space-y-8 animate-in fade-in duration-700 pb-10">
-      
+
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
         <div className="lg:col-span-8 bg-white border border-slate-200 rounded-[2.5rem] p-8 shadow-sm flex flex-col md:flex-row items-center gap-10">
           <div className="w-full md:w-1/2">
@@ -174,57 +185,57 @@ const Dashboard: React.FC<DashboardProps> = ({ data, country }) => {
                     ))}
                   </Pie>
                   <Tooltip contentStyle={{ backgroundColor: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '12px', fontSize: '10px', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }} />
-                  <Legend 
-                    verticalAlign="bottom" 
-                    height={36} 
+                  <Legend
+                    verticalAlign="bottom"
+                    height={36}
                     formatter={(value) => <span className="text-[9px] font-black uppercase tracking-widest text-slate-500">{value}</span>}
                   />
                 </PieChart>
               </ResponsiveContainer>
               <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-[65%] text-center">
-                  <p className="text-4xl font-black text-slate-900 tracking-tighter">{stats.successRate.toFixed(0)}%</p>
-                  <p className="text-[8px] font-black text-emerald-600 uppercase tracking-widest">Éxito</p>
+                <p className="text-4xl font-black text-slate-900 tracking-tighter">{stats.successRate.toFixed(0)}%</p>
+                <p className="text-[8px] font-black text-emerald-600 uppercase tracking-widest">Éxito</p>
               </div>
             </div>
           </div>
 
           <div className="w-full md:w-1/2 space-y-6">
-             <div className="bg-slate-50 border border-slate-100 rounded-3xl p-6">
-                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Total Transacciones</p>
-                <div className="flex items-center justify-between">
-                   <h3 className="text-4xl font-black text-slate-900 tracking-tighter">{stats.totalRecords.toLocaleString()}</h3>
-                   <div className="p-3 bg-blue-50 rounded-2xl">
-                      <Layers className="w-6 h-6 text-blue-500" />
-                   </div>
+            <div className="bg-slate-50 border border-slate-100 rounded-3xl p-6">
+              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Total Transacciones</p>
+              <div className="flex items-center justify-between">
+                <h3 className="text-4xl font-black text-slate-900 tracking-tighter">{stats.totalRecords.toLocaleString()}</h3>
+                <div className="p-3 bg-blue-50 rounded-2xl">
+                  <Layers className="w-6 h-6 text-blue-500" />
                 </div>
-             </div>
+              </div>
+            </div>
 
-             <div className="grid grid-cols-2 gap-4">
-                <div className="bg-emerald-50 border border-emerald-100 rounded-2xl p-4">
-                   <p className="text-[8px] font-black text-emerald-600/60 uppercase tracking-widest mb-1">Si está</p>
-                   <p className="text-xl font-black text-emerald-600">{stats.successCount}</p>
-                </div>
-                <div className="bg-rose-50 border border-rose-100 rounded-2xl p-4">
-                   <p className="text-[8px] font-black text-rose-600/60 uppercase tracking-widest mb-1">No / Difiere</p>
-                   <p className="text-xl font-black text-rose-600">{stats.errorCount + stats.diffCount}</p>
-                </div>
-             </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="bg-emerald-50 border border-emerald-100 rounded-2xl p-4">
+                <p className="text-[8px] font-black text-emerald-600/60 uppercase tracking-widest mb-1">Si está</p>
+                <p className="text-xl font-black text-emerald-600">{stats.successCount}</p>
+              </div>
+              <div className="bg-rose-50 border border-rose-100 rounded-2xl p-4">
+                <p className="text-[8px] font-black text-rose-600/60 uppercase tracking-widest mb-1">No / Difiere</p>
+                <p className="text-xl font-black text-rose-600">{stats.errorCount + stats.diffCount}</p>
+              </div>
+            </div>
           </div>
         </div>
 
         <div className="lg:col-span-4 flex flex-col gap-6">
-          <StatCard 
-            title={`Total Operado (${currency.code})`} 
-            value={`${currency.symbol} ${stats.totalAmount.toLocaleString()}`} 
-            icon={<DollarSign className="w-5 h-5" />} 
-            color="emerald" 
+          <StatCard
+            title={country === 'Global' ? 'Total Operado (USD)' : `Total Operado (${getCurrencyByCountry(country)})`}
+            value={formatCurrency(stats.totalAmount, country)}
+            icon={<DollarSign className="w-5 h-5" />}
+            color="emerald"
             subtitle="Suma total contable"
           />
-          <StatCard 
-            title="Monto en Riesgo" 
-            value={`${currency.symbol} ${stats.amountInRisk.toLocaleString()}`} 
-            icon={<AlertTriangle className="w-5 h-5" />} 
-            color="rose" 
+          <StatCard
+            title="Monto en Riesgo"
+            value={formatCurrency(stats.amountInRisk, country)}
+            icon={<AlertTriangle className="w-5 h-5" />}
+            color="rose"
             subtitle="No conciliado + Difiere"
           />
         </div>
@@ -240,15 +251,15 @@ const Dashboard: React.FC<DashboardProps> = ({ data, country }) => {
               <p className="text-[10px] text-slate-400 font-medium uppercase tracking-widest italic">Análisis financiero por pasarela de pago (Conteo y Volumen en Tooltip)</p>
             </div>
           </div>
-          
+
           <div className="h-[500px] w-full">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart layout="vertical" data={stats.financialByOriginData} margin={{ left: 20, right: 60, top: 0, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" horizontal={true} vertical={false} />
                 <XAxis type="number" hide />
-                <YAxis 
-                  type="category" 
-                  dataKey="name" 
+                <YAxis
+                  type="category"
+                  dataKey="name"
                   width={150}
                   tickLine={false}
                   axisLine={false}

@@ -32,6 +32,7 @@ import {
   WeeklyFinancialData,
   cityToCountry
 } from '@/services/weeklyFinancialService';
+import { formatCurrency } from '@/lib/currencyUtils';
 
 interface WeeklyFinancialViewProps {
   selectedCountry: Country;
@@ -43,14 +44,6 @@ const WeeklyFinancialView: React.FC<WeeklyFinancialViewProps> = ({ selectedCount
   const [viewMode, setViewMode] = useState<'table' | 'chart'>('chart');
   const [startDate, setStartDate] = useState<string>('');
   const [endDate, setEndDate] = useState<string>('');
-
-  // Función para formatear moneda con exactamente 2 decimales
-  const formatCurrency = (value: number): string => {
-    return value.toLocaleString('en-US', {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2
-    });
-  };
 
   // Función para formatear fecha (solo fecha, sin hora)
   const formatDate = (dateString: string): string => {
@@ -212,7 +205,7 @@ const WeeklyFinancialView: React.FC<WeeklyFinancialViewProps> = ({ selectedCount
             <p className="text-[10px] font-black uppercase tracking-widest text-purple-200 mb-1">
               Total {selectedCountry}
             </p>
-            <p className="text-4xl font-black italic tracking-tighter">${summary && formatCurrency(summary.totalSales)}</p>
+            <p className="text-4xl font-black italic tracking-tighter">${summary && formatCurrency(summary.totalSales, selectedCountry)}</p>
             {summary && summary.trend !== 0 && (
               <div className={`flex items-center gap-2 justify-end mt-2 ${summary.trend > 0 ? 'text-emerald-300' : 'text-rose-300'}`}>
                 {summary.trend > 0 ? <TrendingUp size={16} /> : <TrendingDown size={16} />}
@@ -233,10 +226,10 @@ const WeeklyFinancialView: React.FC<WeeklyFinancialViewProps> = ({ selectedCount
             <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Total Sales</p>
           </div>
           <p className="text-3xl font-black italic tracking-tighter text-slate-900 mb-2">
-            ${summary && formatCurrency(summary.totalSales)}
+            ${summary && formatCurrency(summary.totalSales, selectedCountry)}
           </p>
           <p className="text-xs font-bold text-slate-500">
-            Promedio: ${summary && formatCurrency(summary.avgWeeklySales)}/semana
+            Promedio: ${summary && formatCurrency(summary.avgWeeklySales, selectedCountry)}/semana
           </p>
         </div>
 
@@ -248,7 +241,7 @@ const WeeklyFinancialView: React.FC<WeeklyFinancialViewProps> = ({ selectedCount
             <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Catering</p>
           </div>
           <p className="text-3xl font-black italic tracking-tighter text-slate-900 mb-2">
-            ${summary && formatCurrency(summary.totalCatering)}
+            ${summary && formatCurrency(summary.totalCatering, selectedCountry)}
           </p>
           <p className="text-xs font-bold text-slate-500">
             {summary && summary.totalSales ? ((summary.totalCatering / summary.totalSales) * 100).toFixed(1) : '0'}% del total
@@ -263,7 +256,7 @@ const WeeklyFinancialView: React.FC<WeeklyFinancialViewProps> = ({ selectedCount
             <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Delivery</p>
           </div>
           <p className="text-3xl font-black italic tracking-tighter text-slate-900 mb-2">
-            ${summary && formatCurrency(summary.totalDelivery)}
+            ${summary && formatCurrency(summary.totalDelivery, selectedCountry)}
           </p>
           <p className="text-xs font-bold text-slate-500">
             {summary && summary.totalSales ? ((summary.totalDelivery / summary.totalSales) * 100).toFixed(1) : '0'}% del total
@@ -362,7 +355,7 @@ const WeeklyFinancialView: React.FC<WeeklyFinancialViewProps> = ({ selectedCount
                   <YAxis tick={{ fontSize: 10 }} axisLine={false} tickLine={false} tickFormatter={(v) => `$${(v / 1000).toFixed(0)}k`} />
                   <Tooltip
                     contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 10px 30px rgba(0,0,0,0.08)', padding: '12px' }}
-                    formatter={(value: number | undefined) => value !== undefined ? [`$${formatCurrency(value)}`, 'Sales'] : ['$0', 'Sales']}
+                    formatter={(value: number | undefined) => value !== undefined ? [formatCurrency(value, selectedCountry), 'Sales'] : [formatCurrency(0, selectedCountry), 'Sales']}
                   />
                   <Line type="monotone" dataKey="sales" stroke="#9333ea" strokeWidth={3} dot={{ r: 5, fill: '#9333ea' }} />
                 </LineChart>
@@ -384,7 +377,7 @@ const WeeklyFinancialView: React.FC<WeeklyFinancialViewProps> = ({ selectedCount
                   <YAxis tick={{ fontSize: 10 }} axisLine={false} tickLine={false} tickFormatter={(v) => `$${(v / 1000).toFixed(0)}k`} />
                   <Tooltip
                     contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 10px 30px rgba(0,0,0,0.08)', padding: '12px' }}
-                    formatter={(value: number | undefined) => value !== undefined ? [`$${formatCurrency(value)}`, ''] : ['$0', '']}
+                    formatter={(value: number | undefined) => value !== undefined ? [formatCurrency(value, selectedCountry), ''] : [formatCurrency(0, selectedCountry), '']}
                   />
                   <Legend wrapperStyle={{ fontSize: '10px', fontWeight: 900 }} />
                   <Bar dataKey="catering" fill="#6366f1" radius={[8, 8, 0, 0]} name="Catering" />
@@ -409,7 +402,7 @@ const WeeklyFinancialView: React.FC<WeeklyFinancialViewProps> = ({ selectedCount
                     <YAxis tick={{ fontSize: 10 }} axisLine={false} tickLine={false} tickFormatter={(v) => `$${(v / 1000).toFixed(0)}k`} />
                     <Tooltip
                       contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 10px 30px rgba(0,0,0,0.08)', padding: '12px' }}
-                      formatter={(value: number | undefined) => value !== undefined ? [`$${formatCurrency(value)}`, ''] : ['$0', '']}
+                      formatter={(value: number | undefined) => value !== undefined ? [formatCurrency(value, selectedCountry), ''] : [formatCurrency(0, selectedCountry), '']}
                     />
                     <Legend wrapperStyle={{ fontSize: '10px', fontWeight: 900 }} />
                     <Bar dataKey="totalSales" fill="#9333ea" radius={[8, 8, 0, 0]} name="Total Sales">
@@ -447,9 +440,9 @@ const WeeklyFinancialView: React.FC<WeeklyFinancialViewProps> = ({ selectedCount
                 {chartData.map((row, idx) => (
                   <tr key={idx} className="hover:bg-slate-50 transition-colors">
                     <td className="px-6 py-4 text-sm font-bold text-slate-900">{formatDate(row.week)}</td>
-                    <td className="px-6 py-4 text-right text-sm font-bold text-slate-900">${formatCurrency(row.sales)}</td>
-                    <td className="px-6 py-4 text-right text-sm font-semibold text-slate-600">${formatCurrency(row.catering)}</td>
-                    <td className="px-6 py-4 text-right text-sm font-semibold text-slate-600">${formatCurrency(row.delivery)}</td>
+                    <td className="px-6 py-4 text-right text-sm font-bold text-slate-900">{formatCurrency(row.sales, selectedCountry)}</td>
+                    <td className="px-6 py-4 text-right text-sm font-semibold text-slate-600">{formatCurrency(row.catering, selectedCountry)}</td>
+                    <td className="px-6 py-4 text-right text-sm font-semibold text-slate-600">{formatCurrency(row.delivery, selectedCountry)}</td>
                     <td className="px-6 py-4 text-right text-sm font-black text-purple-700">{row.margin.toFixed(1)}%</td>
                   </tr>
                 ))}
@@ -457,9 +450,9 @@ const WeeklyFinancialView: React.FC<WeeklyFinancialViewProps> = ({ selectedCount
               <tfoot className="bg-purple-50 border-t-2 border-purple-200">
                 <tr>
                   <td className="px-6 py-4 text-sm font-black uppercase text-purple-900">Total</td>
-                  <td className="px-6 py-4 text-right text-lg font-black text-purple-900">${summary && formatCurrency(summary.totalSales)}</td>
-                  <td className="px-6 py-4 text-right text-sm font-black text-purple-700">${summary && formatCurrency(summary.totalCatering)}</td>
-                  <td className="px-6 py-4 text-right text-sm font-black text-purple-700">${summary && formatCurrency(summary.totalDelivery)}</td>
+                  <td className="px-6 py-4 text-right text-lg font-black text-purple-900">${summary && formatCurrency(summary.totalSales, selectedCountry)}</td>
+                  <td className="px-6 py-4 text-right text-sm font-black text-purple-700">${summary && formatCurrency(summary.totalCatering, selectedCountry)}</td>
+                  <td className="px-6 py-4 text-right text-sm font-black text-purple-700">${summary && formatCurrency(summary.totalDelivery, selectedCountry)}</td>
                   <td className="px-6 py-4 text-right text-sm font-black text-purple-900">{summary?.avgMargin.toFixed(1)}%</td>
                 </tr>
               </tfoot>

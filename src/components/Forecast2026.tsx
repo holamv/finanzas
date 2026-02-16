@@ -35,7 +35,8 @@ const Forecast2026: React.FC<Forecast2026Props> = ({ selectedCountry, pnlData, m
   const MONTHS_2026 = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
 
   const metrics = useMemo(() => {
-    const HEADER_KEYWORDS = ["GLOBAL", "SALES", "REVENUE", "NET REVENUE", "CONTRIBUTION MARGIN", "PAYROLL", "EBITDA", "BURN RATE"];
+    // Usar las mismas métricas que GlobalPnL
+    const HEADER_KEYWORDS = ["SALES", "REVENUE", "COGS", "GROSS MARGIN", "NET REVENUE", "MARKETING COSTS", "SALES PAYROLL", "CONTRIBUTION MARGIN", "PAYROLL", "TAX EXPENSES", "EBITDA", "BURN RATE"];
 
     // Filtrar solo las filas que son headers globales
     const globalMetrics = pnlData.filter(row =>
@@ -48,7 +49,7 @@ const Forecast2026: React.FC<Forecast2026Props> = ({ selectedCountry, pnlData, m
     const metricsData: MetricCard[] = globalMetrics.map(metric => {
       const lastValue = metric.values?.[0] || 0; // Último valor disponible
       const projected2026 = lastValue * growthRate;
-      const growth = ((projected2026 - lastValue) / lastValue) * 100;
+      const growth = lastValue !== 0 ? ((projected2026 - lastValue) / Math.abs(lastValue)) * 100 : 0;
 
       // Asignar íconos y colores según el tipo
       let icon = DollarSign;
@@ -56,7 +57,7 @@ const Forecast2026: React.FC<Forecast2026Props> = ({ selectedCountry, pnlData, m
       let bgColor = 'bg-blue-50';
 
       const label = metric.label.toUpperCase();
-      if (label.includes('SALES')) {
+      if (label.includes('SALES') && !label.includes('PAYROLL')) {
         icon = TrendingUp;
         color = 'green';
         bgColor = 'bg-green-50';
@@ -64,14 +65,30 @@ const Forecast2026: React.FC<Forecast2026Props> = ({ selectedCountry, pnlData, m
         icon = DollarSign;
         color = 'emerald';
         bgColor = 'bg-emerald-50';
-      } else if (label.includes('MARGIN')) {
+      } else if (label.includes('COGS')) {
+        icon = AlertTriangle;
+        color = 'slate';
+        bgColor = 'bg-slate-50';
+      } else if (label.includes('GROSS MARGIN')) {
         icon = Layers;
-        color = 'teal';
-        bgColor = 'bg-teal-50';
+        color = 'indigo';
+        bgColor = 'bg-indigo-50';
+      } else if (label.includes('MARKETING')) {
+        icon = Activity;
+        color = 'orange';
+        bgColor = 'bg-orange-50';
       } else if (label.includes('PAYROLL')) {
         icon = Users;
         color = 'purple';
         bgColor = 'bg-purple-50';
+      } else if (label.includes('CONTRIBUTION MARGIN')) {
+        icon = Layers;
+        color = 'teal';
+        bgColor = 'bg-teal-50';
+      } else if (label.includes('TAX')) {
+        icon = AlertTriangle;
+        color = 'red';
+        bgColor = 'bg-red-50';
       } else if (label.includes('EBITDA')) {
         icon = Zap;
         color = 'yellow';
@@ -102,7 +119,8 @@ const Forecast2026: React.FC<Forecast2026Props> = ({ selectedCountry, pnlData, m
 
   // Proyecciones mensuales detalladas
   const monthlyProjections = useMemo(() => {
-    const HEADER_KEYWORDS = ["GLOBAL", "SALES", "REVENUE", "NET REVENUE", "CONTRIBUTION MARGIN", "PAYROLL", "EBITDA", "BURN RATE"];
+    // Usar las mismas métricas que GlobalPnL
+    const HEADER_KEYWORDS = ["SALES", "REVENUE", "COGS", "GROSS MARGIN", "NET REVENUE", "MARKETING COSTS", "SALES PAYROLL", "CONTRIBUTION MARGIN", "PAYROLL", "TAX EXPENSES", "EBITDA", "BURN RATE"];
 
     const globalMetrics = pnlData.filter(row =>
       HEADER_KEYWORDS.includes(row.label?.toUpperCase().trim())
@@ -212,23 +230,29 @@ const Forecast2026: React.FC<Forecast2026Props> = ({ selectedCountry, pnlData, m
           <Activity size={20} className="text-[#227A4B]" />
           Resumen Ejecutivo
         </h3>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           <div className="text-center p-4 bg-gradient-to-br from-green-50 to-emerald-50 rounded-lg border border-green-200">
+            <p className="text-xs font-semibold text-gray-600 uppercase mb-2">Ventas Proyectadas</p>
+            <p className="text-xl font-black text-green-700">
+              {formatCurrency(metrics.find(m => m.label.toUpperCase() === 'SALES')?.value || 0)}
+            </p>
+          </div>
+          <div className="text-center p-4 bg-gradient-to-br from-blue-50 to-cyan-50 rounded-lg border border-blue-200">
             <p className="text-xs font-semibold text-gray-600 uppercase mb-2">Ingresos Proyectados</p>
-            <p className="text-2xl font-black text-green-700">
-              {formatCurrency(metrics.find(m => m.label.toUpperCase().includes('REVENUE'))?.value || 0)}
+            <p className="text-xl font-black text-blue-700">
+              {formatCurrency(metrics.find(m => m.label.toUpperCase().includes('REVENUE') && !m.label.toUpperCase().includes('NET'))?.value || 0)}
             </p>
           </div>
           <div className="text-center p-4 bg-gradient-to-br from-yellow-50 to-orange-50 rounded-lg border border-yellow-200">
             <p className="text-xs font-semibold text-gray-600 uppercase mb-2">EBITDA Proyectado</p>
-            <p className="text-2xl font-black text-yellow-700">
-              {formatCurrency(metrics.find(m => m.label.toUpperCase().includes('EBITDA'))?.value || 0)}
+            <p className="text-xl font-black text-yellow-700">
+              {formatCurrency(metrics.find(m => m.label.toUpperCase() === 'EBITDA')?.value || 0)}
             </p>
           </div>
           <div className="text-center p-4 bg-gradient-to-br from-purple-50 to-pink-50 rounded-lg border border-purple-200">
             <p className="text-xs font-semibold text-gray-600 uppercase mb-2">Margen Contribución</p>
-            <p className="text-2xl font-black text-purple-700">
-              {formatCurrency(metrics.find(m => m.label.toUpperCase().includes('MARGIN'))?.value || 0)}
+            <p className="text-xl font-black text-purple-700">
+              {formatCurrency(metrics.find(m => m.label.toUpperCase() === 'CONTRIBUTION MARGIN')?.value || 0)}
             </p>
           </div>
         </div>

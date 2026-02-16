@@ -1,4 +1,5 @@
 import { Country } from '@/types';
+import { inferCurrencyFromCountryString, convertToUSD } from '@/lib/currencyUtils';
 
 const SHEETS_API_KEY = 'AIzaSyBWYawO4OyhYRGFH8O83baGLUCbY-Se59w';
 const SALES_SPREADSHEET_ID = '1gMCkYO9084UY2y0xqnxTFkU_6jKXHEUgcIFoMI4kY6Y';
@@ -11,6 +12,7 @@ export interface SalesRecord {
   monto: number;
   tipo: string;
   pais: string;
+  moneda: string;
   descripcion?: string;
 }
 
@@ -21,6 +23,7 @@ export interface OCRecord {
   monto: number;
   tipo: string;
   pais: string;
+  moneda: string;
   descripcion?: string;
 }
 
@@ -53,13 +56,15 @@ export const getSalesData = async (): Promise<SalesRecord[]> => {
 
     for (let i = 1; i < rows.length; i++) {
       const row = rows[i];
+      const pais = row[8] || '';
       records.push({
         id: row[0] || `sale-${i}`,
         cliente: row[1] || 'Sin nombre',
         tipo: row[2] || 'VENTA',
         monto: parseFloat(row[5]) || 0,
         fecha: row[7] || '',
-        pais: row[8] || '', // Columna I es PAIS (índice 8)
+        pais: pais,
+        moneda: row[6] || inferCurrencyFromCountryString(pais), // Columna G o inferir por país
         descripcion: row[3] || '',
       });
     }
@@ -99,12 +104,14 @@ export const getOCData = async (): Promise<OCRecord[]> => {
 
     for (let i = 1; i < rows.length; i++) {
       const row = rows[i];
+      const pais = row[2] || '';
       records.push({
         id: row[0] || `oc-${i}`, // Correlativo
         proveedor: row[3] || 'Sin proveedor',
         tipo: row[1] || 'PAGO PLANIFICADO',
-        pais: row[2] || '',
+        pais: pais,
         monto: parseFloat(row[7]) || 0,
+        moneda: row[6] || inferCurrencyFromCountryString(pais), // Columna G (Moneda) o inferir
         fecha: row[10] || '', // Fecha registro
         descripcion: row[5] || '', // Concepto
       });
@@ -167,7 +174,8 @@ export function filterOCByCountryAndDateRange(
 export function groupByWeek(
   inflows: SalesRecord[],
   outflows: OCRecord[],
-  weekRanges: { startDate: Date, endDate: Date }[]
+  weekRanges: { startDate: Date, endDate: Date }[],
+  country: Country = 'Global'
 ): Array<{
   week: number,
   totalInflows: number,
@@ -186,8 +194,15 @@ export function groupByWeek(
       return d >= range.startDate && d <= range.endDate;
     });
 
-    const totalInflows = weekInflows.reduce((sum, i) => sum + i.monto, 0);
-    const totalOutflows = weekOutflows.reduce((sum, o) => sum + o.monto, 0);
+    const totalInflows = weekInflows.reduce((sum, i) => {
+      const amount = country === 'Global' ? convertToUSD(i.monto, i.pais || i.moneda || 'USD') : i.monto;
+      return sum + amount;
+    }, 0);
+
+    const totalOutflows = weekOutflows.reduce((sum, o) => {
+      const amount = country === 'Global' ? convertToUSD(o.monto, o.pais || o.moneda || 'USD') : o.monto;
+      return sum + amount;
+    }, 0);
 
     return {
       week: index + 1,

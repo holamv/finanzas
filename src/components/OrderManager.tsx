@@ -21,6 +21,7 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { OCData, Country } from '@/types';
 import { updateOrderMetadata } from '@/services/googleSheetsService';
+import { convertToUSD, formatCurrency } from '@/lib/currencyUtils';
 
 interface OrderManagerProps {
     orders: OCData[];
@@ -79,11 +80,18 @@ export default function OrderManager({ orders, selectedCountry, onRefresh, isLoa
         // Base counts (independent of current statusFilter but respecting country)
         const baseFilteredByCountry = orders.filter(o => selectedCountry === 'Global' || o.country === selectedCountry);
 
+        const totalAmount = baseFilteredByCountry.reduce((acc, o) => {
+            if (selectedCountry === 'Global') {
+                return acc + convertToUSD(o.monto, o.pais || o.moneda || 'USD');
+            }
+            return acc + o.monto;
+        }, 0);
+
         return {
             total: baseFilteredByCountry.length,
             pending: baseFilteredByCountry.filter(o => o.statusTesoreriaRaw === 'Pendiente').length,
             paid: baseFilteredByCountry.filter(o => o.statusTesoreriaRaw === 'Pago completo').length,
-            totalAmount: baseFilteredByCountry.reduce((acc, o) => acc + o.monto, 0),
+            totalAmount: totalAmount,
             criticalAlerts: criticalAlertsList.length
         };
     }, [orders, selectedCountry, criticalAlertsList]);
@@ -107,15 +115,21 @@ export default function OrderManager({ orders, selectedCountry, onRefresh, isLoa
         doc.text(`Generado el: ${new Date().toLocaleString()}`, 14, 28);
         doc.text(`Filtro: ${statusFilter === 'Critical' ? 'Alertas Críticas' : statusFilter === 'All' ? 'Todas' : statusFilter}`, 14, 34);
 
-        const tableData = filteredOrders.map(oc => [
-            oc.correlativo,
-            oc.proveedor,
-            oc.fechaVencimiento || '---',
-            oc.concepto,
-            `${oc.moneda} ${oc.monto.toLocaleString()}`,
-            oc.statusTesoreriaRaw || 'Pendiente',
-            'CRISTHIAN MAYO'
-        ]);
+        const tableData = filteredOrders.map(oc => {
+            const displayAmount = selectedCountry === 'Global'
+                ? formatCurrency(convertToUSD(oc.monto, oc.pais || oc.moneda || 'USD'), selectedCountry)
+                : formatCurrency(oc.monto, selectedCountry);
+
+            return [
+                oc.correlativo,
+                oc.proveedor,
+                oc.fechaVencimiento || '---',
+                oc.concepto,
+                displayAmount,
+                oc.statusTesoreriaRaw || 'Pendiente',
+                'CRISTHIAN MAYO'
+            ];
+        });
 
         autoTable(doc, {
             startY: 40,
@@ -144,7 +158,7 @@ export default function OrderManager({ orders, selectedCountry, onRefresh, isLoa
                     { id: 'Pendiente', label: 'Pendientes', value: stats.pending, icon: Clock, color: 'text-amber-500' },
                     { id: 'Critical', label: 'Alertas Críticas', value: stats.criticalAlerts, icon: AlertCircle, color: 'text-rose-500' },
                     { id: 'Pago completo', label: 'PAGADAS', value: stats.paid, icon: CheckCircle2, color: 'text-emerald-500' },
-                    { id: 'Amount', label: 'Monto Total', value: `$${stats.totalAmount.toLocaleString()}`, icon: ExternalLink, color: 'text-[#00B14F]' },
+                    { id: 'Amount', label: 'Monto Total', value: formatCurrency(stats.totalAmount, selectedCountry), icon: ExternalLink, color: 'text-[#00B14F]' },
                 ].map((stat, i) => {
                     const isCriticalAlert = stat.label === 'Alertas Críticas' && (typeof stat.value === 'number' && stat.value > 0);
                     const isActive = statusFilter === stat.id;
@@ -265,7 +279,15 @@ export default function OrderManager({ orders, selectedCountry, onRefresh, isLoa
                                             </td>
                                             <td className="px-6 py-5">
                                                 <div className="flex flex-col">
-                                                    <span className="text-[11px] font-black text-[#00B14F] italic">{oc.moneda} {oc.monto.toLocaleString()}</span>
+                                                    <span className="text-[11px] font-black text-[#00B14F] italic">
+                                                        {selectedCountry === 'Global'
+                                                            ? formatCurrency(convertToUSD(oc.monto, oc.pais || oc.moneda || 'USD'), selectedCountry)
+                                                            : formatCurrency(oc.monto, selectedCountry)
+                                                        }
+                                                    </span>
+                                                    {selectedCountry === 'Global' && oc.moneda !== 'USD' && (
+                                                        <span className="text-[8px] text-slate-400 font-bold uppercase">{oc.moneda} {oc.monto.toLocaleString()}</span>
+                                                    )}
                                                     <span className="text-[8px] text-slate-400 font-bold uppercase">Pais: {oc.pais}</span>
                                                 </div>
                                             </td>

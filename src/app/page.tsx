@@ -7,6 +7,7 @@ import AIChat from '@/components/AIChat';
 import { PredictionsDashboard } from '@/components/PredictionsDashboard';
 import CockpitDashboard from '@/components/CockpitDashboard';
 import GlobalPnL from '@/components/GlobalPnL';
+import GlobalPnLMonthly from '@/components/GlobalPnLMonthly';
 import GatewayManager from '@/components/GatewayManager';
 import PayUMonitor from '@/components/PayUMonitor';
 import { TransactionForm } from '@/components/TransactionForm';
@@ -19,6 +20,7 @@ import ProjectionDashboard from '@/components/ProjectionDashboard';
 import CashScenarios from '@/components/CashScenarios';
 import CashVariance from '@/components/CashVariance';
 import OrderManager from '@/components/OrderManager';
+import RealVsBudget from '@/components/RealVsBudget';
 import {
   Country,
   AppTab,
@@ -46,8 +48,21 @@ import {
   LogOut
 } from 'lucide-react';
 
-const PNL_APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyPmJLaJyqM0HkcLXxF7Ss0DBApF_aYnyNkKdkdgWUcPxfZLilotIiaKGtBG4pgNnN9/exec";
-const HEADER_KEYWORDS = ["GLOBAL", "SALES", "REVENUE", "NET REVENUE", "CONTRIBUTION MARGIN", "PAYROLL", "EBITDA", "BURN RATE"];
+const HEADER_METRICS = [
+  { match: "SALES", label: "Sales (ventas)" },
+  { match: "REVENUE", label: "Revenue (recarga)" },
+  { match: "SALES REDUCTION", label: "Sales reduction" },
+  { match: "NET REVENUE", label: "Net revenue" },
+  { match: "COGS", label: "Cogs" },
+  { match: "GROSS MARGIN", label: "Gross margin (margen bruto)" },
+  { match: "MARKETING COST", label: "Marketing cost (costos de marketing)" },
+  { match: "SALES PAYROLL", label: "Sales Payroll" },
+  { match: "CONTRIBUTION MARGIN", label: "Contribution Margin" },
+  { match: "EXPENSES (PAYROLL)", label: "Expenses (payroll)" },
+  { match: "TAX EXPENSES", label: "Tax expenses" },
+  { match: "EBITDA", label: "EBITDA" },
+  { match: "BURN RATE", label: "Burn rate" }
+];
 
 export default function Home() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -56,7 +71,7 @@ export default function Home() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
 
   // Estados P&L
-  const [pnlRows, setPnlRows] = useState<PnLRow[]>([]);
+  const [pnlRows, setPnlRows] = useState<any[]>([]);
   const [pnlMonths, setPnlMonths] = useState<string[]>([]);
   const [isFetchingPnL, setIsFetchingPnL] = useState(false);
 
@@ -101,30 +116,119 @@ export default function Home() {
   const fetchPnLData = async () => {
     setIsFetchingPnL(true);
     try {
-      const response = await fetch(PNL_APPS_SCRIPT_URL);
-      const data = await response.json();
+      const response = await fetch('/api/pnl');
+      const result = await response.json();
 
-      const reversedMonths = [...(data.months || [])].reverse();
-      setPnlMonths(reversedMonths);
+      const TARGET_METRICS = [
+        "SALES", "REVENUE", "SALES REDUCTION", "NET REVENUE", "COGS",
+        "GROSS MARGIN", "MARKETING COST", "SALES PAYROLL", "CONTRIBUTION MARGIN",
+        "EXPENSES (PAYROLL)", "TAX EXPENSES", "EBITDA", "BURN RATE"
+      ];
 
-      const rawRows = data.rows || data.data || [];
-      const mappedRows: PnLRow[] = rawRows.map((r: any) => {
-        const conceptLabel = (r.concept || r.label || 'Sin Nombre').toString();
-        const isHeaderManual = HEADER_KEYWORDS.includes(conceptLabel.toUpperCase().trim());
-        return {
-          label: conceptLabel,
-          unit: r.unit || '-',
-          isHeader: r.isHeader === true || isHeaderManual,
-          values: [...(r.values || [])].reverse()
+      if (result.months && result.pnl_data) {
+        // Ordenamos de Dic a Ene
+        const reversedMonths = [...result.months].reverse();
+        setPnlMonths(reversedMonths);
+
+        const monthsCount = result.months.length;
+        const rows: any[] = [];
+
+        const normalizeValues = (arr: any) => {
+          if (!arr || !Array.isArray(arr)) return Array.from({ length: monthsCount }, () => 0);
+          // Mapeamos a números y luego invertimos para que coincida con reversedMonths
+          return arr.slice(0, monthsCount)
+            .map((v: any) => (v === '' || v === null || isNaN(Number(v))) ? 0 : Number(v))
+            .reverse();
         };
-      });
 
-      const filteredRows = mappedRows.filter(r => {
-        const labelUpper = r.label.toUpperCase().trim();
-        return labelUpper !== "PRE NET REVENUE" && labelUpper !== "EXPENSES";
-      });
+        const normalize = (s: string) => (s || '').toString().toUpperCase().replace(/[^A-Z0-9]/g, '');
 
-      setPnlRows(filteredRows);
+        HEADER_METRICS.forEach(({ match, label }) => {
+          const normTarget = normalize(match);
+          const found = result.pnl_data.find((m: any) => normalize(m.category) === normTarget);
+
+          if (found) {
+            rows.push({
+              label: label,
+              unit: found.unit || 'USD',
+              isHeader: true,
+              values: normalizeValues(found.total_values)
+            });
+
+            if (found.sub_metrics && typeof found.sub_metrics === 'object') {
+              Object.entries(found.sub_metrics).forEach(([subName, subValues]: [string, any]) => {
+                const displaySubName = subName.split('_').map((w: string) => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+                rows.push({
+                  label: displaySubName,
+                  unit: found.unit || 'USD',
+                  isHeader: false,
+                  values: normalizeValues(subValues)
+                });
+              });
+            }
+          } else {
+            rows.push({
+              label: label,
+              unit: 'USD',
+              isHeader: true,
+              values: Array.from({ length: monthsCount }, () => 0)
+            });
+          }
+        });
+
+        setPnlRows(rows);
+      } else if (result.weeks && result.citiesData) {
+        // AGREGAR SEMANAS A MESES (Para el caso de P&L Global Mensual)
+        const monthIndices: { [key: string]: number[] } = {};
+        const monthNames: string[] = [];
+
+        result.weeks.forEach((w: string, idx: number) => {
+          const parts = w.split('/');
+          let date;
+          if (parts.length === 3) {
+            date = new Date(parseInt(parts[2]), parseInt(parts[1]) - 1, parseInt(parts[0]));
+          } else {
+            date = new Date(w);
+          }
+
+          if (!isNaN(date.getTime())) {
+            const mName = date.toLocaleString('es-ES', { month: 'short', year: 'numeric' });
+            if (!monthIndices[mName]) {
+              monthIndices[mName] = [];
+              monthNames.push(mName);
+            }
+            monthIndices[mName].push(idx);
+          }
+        });
+
+        const cities = Object.keys(result.citiesData);
+        const filteredRows: any[] = [];
+
+        if (cities.length > 0) {
+          const allMetrics = Object.keys(result.citiesData[cities[0]]);
+          allMetrics.forEach(m => {
+            const upperM = m.toUpperCase().trim();
+            if (TARGET_METRICS.includes(upperM)) {
+              const weeklyGlobal = result.weeks.map((_: string, idx: number) => {
+                return cities.reduce((sum, city) => sum + (result.citiesData[city][m][idx] || 0), 0);
+              });
+
+              const monthlyValues = monthNames.map(name => {
+                return monthIndices[name].reduce((sum, idx) => sum + weeklyGlobal[idx], 0);
+              });
+
+              filteredRows.push({
+                label: m,
+                unit: 'USD',
+                isHeader: true,
+                values: monthlyValues
+              });
+            }
+          });
+        }
+        setPnlMonths(monthNames);
+        setPnlRows(filteredRows);
+      }
     } catch (e) {
       console.error("Error cargando el P&L:", e);
     } finally {
@@ -142,10 +246,16 @@ export default function Home() {
   const renderContent = () => {
     switch (activeTab) {
       case 'pnl_global':
-        return <GlobalPnL data={pnlRows} loading={isFetchingPnL} months={pnlMonths} />;
+        return <GlobalPnL data={pnlRows} loading={isFetchingPnL} months={pnlMonths} country="Global" />;
+
+      case 'pnl_monthly':
+        return <GlobalPnLMonthly country="Global" />;
 
       case 'cockpit':
         return <CockpitDashboard recon={historyData} country={selectedCountry} />;
+
+      case 'real_vs_budget':
+        return <RealVsBudget country={selectedCountry} />;
 
       case 'conciliation_active':
         return <BankReconciliation selectedCountry={selectedCountry} />;
@@ -190,7 +300,12 @@ export default function Home() {
       case 'ai_predictions':
         return (
           <PredictionsDashboard
-            data={historyData.map(r => ({ ...r, amount: r["MONTO CONTABLE"], date: new Date(r.FECHA || Date.now()), country: r.PAIS === 'PE' ? 'Peru' : 'Global' }))}
+            data={historyData.map(r => {
+              const countryName = r.PAIS === 'PE' || r.PAIS === 'Peru' ? 'Peru' :
+                r.PAIS === 'CO' || r.PAIS === 'Colombia' ? 'Colombia' :
+                  r.PAIS === 'MX' || r.PAIS === 'Mexico' ? 'Mexico' : 'Global';
+              return { ...r, amount: r["MONTO CONTABLE"], date: new Date(r.FECHA || Date.now()), country: countryName };
+            })}
             selectedCountry={selectedCountry}
             setSelectedCountry={setSelectedCountry}
             isFetching={loadingData}
