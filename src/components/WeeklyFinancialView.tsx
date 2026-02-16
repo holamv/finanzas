@@ -251,7 +251,7 @@ const WeeklyFinancialView: React.FC<WeeklyFinancialViewProps> = ({ selectedCount
             ${summary && formatCurrency(summary.totalCatering)}
           </p>
           <p className="text-xs font-bold text-slate-500">
-            {((summary?.totalCatering / summary?.totalSales) * 100).toFixed(1)}% del total
+            {summary && summary.totalSales ? ((summary.totalCatering / summary.totalSales) * 100).toFixed(1) : '0'}% del total
           </p>
         </div>
 
@@ -266,7 +266,7 @@ const WeeklyFinancialView: React.FC<WeeklyFinancialViewProps> = ({ selectedCount
             ${summary && formatCurrency(summary.totalDelivery)}
           </p>
           <p className="text-xs font-bold text-slate-500">
-            {((summary?.totalDelivery / summary?.totalSales) * 100).toFixed(1)}% del total
+            {summary && summary.totalSales ? ((summary.totalDelivery / summary.totalSales) * 100).toFixed(1) : '0'}% del total
           </p>
         </div>
 
