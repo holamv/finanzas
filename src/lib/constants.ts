@@ -1,5 +1,5 @@
 
-import { Transaction, TransactionType, Country } from './types';
+import { Transaction, TransactionType, Country } from '@/types';
 
 export const INITIAL_TRANSACTIONS: Transaction[] = [
   // Fix: Removed accents from country names to match the Country type in types.ts

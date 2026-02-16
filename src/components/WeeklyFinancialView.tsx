@@ -362,7 +362,7 @@ const WeeklyFinancialView: React.FC<WeeklyFinancialViewProps> = ({ selectedCount
                   <YAxis tick={{ fontSize: 10 }} axisLine={false} tickLine={false} tickFormatter={(v) => `$${(v / 1000).toFixed(0)}k`} />
                   <Tooltip
                     contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 10px 30px rgba(0,0,0,0.08)', padding: '12px' }}
-                    formatter={(value: number) => [`$${formatCurrency(value)}`, 'Sales']}
+                    formatter={(value: number | undefined) => value !== undefined ? [`$${formatCurrency(value)}`, 'Sales'] : ['$0', 'Sales']}
                   />
                   <Line type="monotone" dataKey="sales" stroke="#9333ea" strokeWidth={3} dot={{ r: 5, fill: '#9333ea' }} />
                 </LineChart>
@@ -384,7 +384,7 @@ const WeeklyFinancialView: React.FC<WeeklyFinancialViewProps> = ({ selectedCount
                   <YAxis tick={{ fontSize: 10 }} axisLine={false} tickLine={false} tickFormatter={(v) => `$${(v / 1000).toFixed(0)}k`} />
                   <Tooltip
                     contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 10px 30px rgba(0,0,0,0.08)', padding: '12px' }}
-                    formatter={(value: number) => [`$${formatCurrency(value)}`, '']}
+                    formatter={(value: number | undefined) => value !== undefined ? [`$${formatCurrency(value)}`, ''] : ['$0', '']}
                   />
                   <Legend wrapperStyle={{ fontSize: '10px', fontWeight: 900 }} />
                   <Bar dataKey="catering" fill="#6366f1" radius={[8, 8, 0, 0]} name="Catering" />
@@ -409,7 +409,7 @@ const WeeklyFinancialView: React.FC<WeeklyFinancialViewProps> = ({ selectedCount
                     <YAxis tick={{ fontSize: 10 }} axisLine={false} tickLine={false} tickFormatter={(v) => `$${(v / 1000).toFixed(0)}k`} />
                     <Tooltip
                       contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 10px 30px rgba(0,0,0,0.08)', padding: '12px' }}
-                      formatter={(value: number) => [`$${formatCurrency(value)}`, '']}
+                      formatter={(value: number | undefined) => value !== undefined ? [`$${formatCurrency(value)}`, ''] : ['$0', '']}
                     />
                     <Legend wrapperStyle={{ fontSize: '10px', fontWeight: 900 }} />
                     <Bar dataKey="totalSales" fill="#9333ea" radius={[8, 8, 0, 0]} name="Total Sales">
