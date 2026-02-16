@@ -105,7 +105,7 @@ const EBITDAVsContributionMargin: React.FC = () => {
               <XAxis dataKey="month" />
               <YAxis tickFormatter={(value) => `$${(value / 1000000).toFixed(0)}M`} />
               <Tooltip
-                formatter={(value: number) => formatCurrency(value)}
+                formatter={(value: number | undefined) => value !== undefined ? formatCurrency(value) : ''}
                 labelFormatter={(label) => `Mes: ${label}`}
               />
               <Legend />
@@ -118,7 +118,7 @@ const EBITDAVsContributionMargin: React.FC = () => {
               <XAxis dataKey="month" />
               <YAxis tickFormatter={(value) => `$${(value / 1000000).toFixed(0)}M`} />
               <Tooltip
-                formatter={(value: number) => formatCurrency(value)}
+                formatter={(value: number | undefined) => value !== undefined ? formatCurrency(value) : ''}
                 labelFormatter={(label) => `Mes: ${label}`}
               />
               <Legend />

@@ -274,7 +274,7 @@ const MetricCard = ({ title, real, budget, variance, variancePercent, icon, coun
     );
 };
 
-const SummaryItem = ({ label, value, color, subtitle }: any) => {
+const SummaryItem = ({ label, value, color, subtitle }: { label: string; value: string | number; color: 'emerald' | 'blue' | 'rose'; subtitle?: string }) => {
     const colorClass = {
         emerald: 'text-emerald-600',
         blue: 'text-blue-600',
