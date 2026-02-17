@@ -40,6 +40,8 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ selectedCountry
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('Todos');
   const [viewMode, setViewMode] = useState<'table' | 'dashboard'>('table');
+  const [fechaDesde, setFechaDesde] = useState('');
+  const [fechaHasta, setFechaHasta] = useState('');
 
   // Webhooks por país
   const webhooks: Record<Country, string> = {
@@ -180,9 +182,29 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ selectedCountry
       const matchCountry = selectedCountry === 'Global' || !item.PAIS || item.PAIS === target;
       const matchStatus = statusFilter === 'Todos' || item.ESTADO === statusFilter;
       const matchSearch = searchTerm === '' || JSON.stringify(item).toLowerCase().includes(searchTerm.toLowerCase());
-      return matchCountry && matchStatus && matchSearch;
+      
+      // Filtro por fecha
+      let matchFecha = true;
+      if (fechaDesde || fechaHasta) {
+        let itemDate: string | null = null;
+        try {
+          if (item.FECHA) {
+            const date = new Date(item.FECHA);
+            if (!isNaN(date.getTime())) {
+              itemDate = date.toISOString().split('T')[0];
+            }
+          }
+        } catch (e) {
+          itemDate = null;
+        }
+        
+        if (fechaDesde && itemDate && itemDate < fechaDesde) matchFecha = false;
+        if (fechaHasta && itemDate && itemDate > fechaHasta) matchFecha = false;
+      }
+      
+      return matchCountry && matchStatus && matchSearch && matchFecha;
     });
-  }, [reconData, historyData, selectedCountry, statusFilter, searchTerm, isHistoryView]);
+  }, [reconData, historyData, selectedCountry, statusFilter, searchTerm, isHistoryView, fechaDesde, fechaHasta]);
 
   const reconciliationStats = useMemo(() => {
     // Siempre usar historyData para mostrar el estado del Excel
@@ -408,36 +430,73 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ selectedCountry
 
       {/* Búsqueda y Filtros - Mostrar cuando hay datos */}
       {(filteredReconciliation.length > 0 || isHistoryView) && (
-        <div className="bg-white border border-gray-200 rounded-xl p-6 flex flex-col md:flex-row gap-4 items-center">
-          <div className="relative flex-1 w-full group">
-            <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 group-focus-within:text-[#227A4B]" />
-            <input
-              type="text"
-              placeholder="Buscar registros..."
-              value={searchTerm}
-              onChange={e => setSearchTerm(e.target.value)}
-              className="w-full bg-gray-50 border border-gray-200 rounded-lg py-2.5 pl-11 pr-4 text-sm font-medium focus:outline-none focus:border-[#227A4B] transition-all"
-            />
+        <div className="bg-white border border-gray-200 rounded-xl p-6 space-y-4">
+          <div className="flex flex-col md:flex-row gap-4 items-end">
+            <div className="relative flex-1 w-full group">
+              <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 group-focus-within:text-[#227A4B]" />
+              <input
+                type="text"
+                placeholder="Buscar registros..."
+                value={searchTerm}
+                onChange={e => setSearchTerm(e.target.value)}
+                className="w-full bg-gray-50 border border-gray-200 rounded-lg py-2.5 pl-11 pr-4 text-sm font-medium focus:outline-none focus:border-[#227A4B] transition-all"
+              />
+            </div>
+
+            <div className="flex gap-2 bg-gray-50 p-1 rounded-lg border border-gray-200">
+              <button
+                onClick={() => setViewMode('table')}
+                className={`px-5 py-2 rounded-md text-xs font-bold uppercase tracking-wide transition-all ${
+                  viewMode === 'table' ? 'bg-white shadow-sm text-gray-800' : 'text-gray-400'
+                }`}
+              >
+                <TableIcon size={14} className="inline mr-1" />
+                Tabla
+              </button>
+              <button
+                onClick={() => setViewMode('dashboard')}
+                className={`px-5 py-2 rounded-md text-xs font-bold uppercase tracking-wide transition-all ${
+                  viewMode === 'dashboard' ? 'bg-white shadow-sm text-gray-800' : 'text-gray-400'
+                }`}
+              >
+                Dashboard
+              </button>
+            </div>
           </div>
 
-          <div className="flex gap-2 bg-gray-50 p-1 rounded-lg border border-gray-200">
-            <button
-              onClick={() => setViewMode('table')}
-              className={`px-5 py-2 rounded-md text-xs font-bold uppercase tracking-wide transition-all ${
-                viewMode === 'table' ? 'bg-white shadow-sm text-gray-800' : 'text-gray-400'
-              }`}
-            >
-              <TableIcon size={14} className="inline mr-1" />
-              Tabla
-            </button>
-            <button
-              onClick={() => setViewMode('dashboard')}
-              className={`px-5 py-2 rounded-md text-xs font-bold uppercase tracking-wide transition-all ${
-                viewMode === 'dashboard' ? 'bg-white shadow-sm text-gray-800' : 'text-gray-400'
-              }`}
-            >
-              Dashboard
-            </button>
+          {/* Filtros de Fecha */}
+          <div className="flex flex-col md:flex-row gap-3 items-end border-t border-gray-100 pt-4">
+            <div className="flex-1">
+              <label className="text-xs font-bold text-gray-600 uppercase tracking-wide block mb-2">Desde</label>
+              <input
+                type="date"
+                value={fechaDesde}
+                onChange={e => setFechaDesde(e.target.value)}
+                className="w-full bg-gray-50 border border-gray-200 rounded-lg py-2.5 px-4 text-sm font-medium focus:outline-none focus:border-[#227A4B] transition-all"
+              />
+            </div>
+
+            <div className="flex-1">
+              <label className="text-xs font-bold text-gray-600 uppercase tracking-wide block mb-2">Hasta</label>
+              <input
+                type="date"
+                value={fechaHasta}
+                onChange={e => setFechaHasta(e.target.value)}
+                className="w-full bg-gray-50 border border-gray-200 rounded-lg py-2.5 px-4 text-sm font-medium focus:outline-none focus:border-[#227A4B] transition-all"
+              />
+            </div>
+
+            {(fechaDesde || fechaHasta) && (
+              <button
+                onClick={() => {
+                  setFechaDesde('');
+                  setFechaHasta('');
+                }}
+                className="px-4 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-bold rounded-lg transition-all"
+              >
+                Limpiar Fechas
+              </button>
+            )}
           </div>
         </div>
       )}
