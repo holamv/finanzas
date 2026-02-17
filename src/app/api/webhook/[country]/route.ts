@@ -84,9 +84,10 @@ async function saveWebhookDataToSheets(
 
 export async function POST(
   req: NextRequest,
-  { params }: { params: { country: string } }
+  context: any
 ) {
   try {
+    const params = await context.params;
     const { country } = params;
     const body = await req.json();
 
@@ -110,7 +111,7 @@ export async function POST(
       { status: 200 }
     );
   } catch (error: any) {
-    console.error(`❌ Error procesando webhook para ${params.country}:`, error);
+    console.error(`❌ Error procesando webhook:`, error);
 
     return NextResponse.json(
       {
@@ -126,11 +127,14 @@ export async function POST(
 // También permite GET para testing desde n8n
 export async function GET(
   req: NextRequest,
-  { params }: { params: { country: string } }
+  context: any
 ) {
+  const params = await context.params;
+  const { country } = params;
+  
   return NextResponse.json({
     status: 'webhook endpoint activo',
-    country: params.country,
+    country: country,
     receivedAt: new Date().toISOString()
   });
 }
